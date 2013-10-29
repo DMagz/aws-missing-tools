@@ -43,6 +43,8 @@ get_EBS_List()
 		then echo -e "An error occured when running ec2-describe-volumes. The error returned is below:\n$ebs_backup_list_complete" 1>&2 ; exit 70
 	fi
 	ebs_backup_list=`echo "$ebs_backup_list_complete" | grep ^VOLUME | cut -f 2`
+	ebs_backup_list_name=`echo "$ebs_backup_list_complete" | grep ^TAG | grep Name | cut -f 5`
+	ebs_backup_list_name_a=(${ebs_backup_list_name})
 	#code to right will output list of EBS volumes to be backed up: echo -e "Now outputting ebs_backup_list:\n$ebs_backup_list"
 }
 
@@ -54,7 +56,7 @@ create_EBS_Snapshot_Tags()
 	if $name_tag_create
 		then
 		ec2_snapshot_resource_id=`echo "$ec2_create_snapshot_result" | cut -f 2`
-		snapshot_tags="$snapshot_tags --tag Name=ec2ab_${ebs_selected}_$date_current"
+		snapshot_tags="$snapshot_tags --tag Name=ec2ab_${ebs_backup_list_name_a[$icount]}_${ebs_selected}_$date_current"
 	fi
 	#if $hostname_tag_create is true then append --tag InitiatingHost=`hostname -f` to the variable $snapshot_tags
 	if $hostname_tag_create
@@ -225,9 +227,10 @@ fi
 get_EBS_List
 
 #the loop below is called once for each volume in $ebs_backup_list - the currently selected EBS volume is passed in as "ebs_selected"
+icount=0
 for ebs_selected in $ebs_backup_list
 do
-	ec2_snapshot_description="ec2ab_${ebs_selected}_$date_current"
+	ec2_snapshot_description="ec2ab_${ebs_backup_list_name_a[$icount]}_${ebs_selected}_$date_current"
 	ec2_create_snapshot_result=`ec2-create-snapshot --region $region -d $ec2_snapshot_description $ebs_selected 2>&1`
 	if [[ $? != 0 ]]
 		then echo -e "An error occured when running ec2-create-snapshot. The error returned is below:\n$ec2_create_snapshot_result" 1>&2 ; exit 70
@@ -235,6 +238,7 @@ do
 		ec2_snapshot_resource_id=`echo "$ec2_create_snapshot_result" | cut -f 2`
 	fi	
 	create_EBS_Snapshot_Tags
+	icount=$(($icount+1))
 done
 
 #if purge_snapshots is true, then run purge_EBS_Snapshots function
